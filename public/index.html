@@ -1,167 +1,215 @@
-// Importações de Módulos Essenciais
-const {onCall, HttpsError} = require("firebase-functions/v2/https");
-const {initializeApp} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
-const {getAuth} = require("firebase-admin/auth");
-const {HfInference} = require("@huggingface/inference");
-const logger = require("firebase-functions/logger");
-const {defineString} = require("firebase-functions/params");
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Chatbot RH</title>
+    <style>
+        :root {
+            --cor-container: rgba(255, 255, 255, 0.9);
+            --sombra: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(315deg, #7f5a83, #0d324d, #5b42f3, #00ddeb);
+            background-size: 400% 400%;
+            animation: gradientAnimation 15s ease infinite;
+        }
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .login-form {
+            padding: 2.5rem;
+            max-width: 420px;
+            width: 90%;
+            border-radius: 1rem;
+            background-color: var(--cor-container);
+            box-shadow: var(--sombra);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        .form-title {
+            font-size: 1.6rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #111;
+        }
+        .input-container {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+        .form-input {
+            background-color: #eee;
+            border: none;
+            padding: 1rem;
+            font-size: 1rem;
+            width: 100%;
+            border-radius: 1rem;
+            color: #3d3d3d;
+            box-shadow: 0 0.4rem #dfd9d9;
+            outline: none;
+        }
+        .form-input:focus {
+            outline: 2px solid #5b42f3;
+        }
+        .gradient-button {
+            background-image: linear-gradient(144deg, #af40ff, #5b42f3 50%, #00ddeb);
+            border: 0;
+            border-radius: 8px;
+            box-shadow: rgba(151, 65, 252, 0.2) 0 15px 30px -5px;
+            color: #ffffff;
+            padding: 3px;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            margin-top: 1rem;
+        }
+        .gradient-button span {
+            background-color: rgb(5, 6, 45);
+            padding: 16px 24px;
+            border-radius: 6px;
+            display: block;
+            text-align: center;
+            font-weight: 500;
+            font-size: 1rem;
+            transition: 300ms;
+        }
+        .gradient-button:hover span { background: none; }
+        .toggle-form {
+            text-align: center;
+            margin-top: 1.5rem;
+            color: #333;
+        }
+        .toggle-form a {
+            color: #5b42f3;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .notification-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
+        .toast { padding: 12px; margin-bottom: 10px; border-radius: 8px; color: white; display: flex; align-items: center; box-shadow: var(--sombra); transform: translateX(120%); transition: transform 0.5s ease-in-out; font-size: 0.95rem; }
+        .toast.show { transform: translateX(0); }
+        .toast.error { background-color: #dc3545; }
+    </style>
+</head>
+<body>
 
-// --- Configuração Inicial ---
-const hfApiKey = defineString("HUGGINGFACE_API_KEY");
-initializeApp();
+    <div class="login-form">
+        <p class="form-title" id="form-title">Login</p>
+        <div class="input-container">
+            <input type="email" id="email" class="form-input" placeholder="Digite o e-mail">
+        </div>
+        <div class="input-container">
+            <input type="password" id="password" class="form-input" placeholder="Digite a senha">
+        </div>
+        <button type="button" id="auth-button" class="gradient-button">
+            <span id="auth-button-text">Entrar</span>
+        </button>
+        <div class="toggle-form">
+            <p id="toggle-text">Não tem uma conta? <a id="toggle-link">Registe-se</a></p>
+        </div>
+    </div>
 
-// --- Funções Auxiliares ---
+    <div id="notification-container" class="notification-container"></div>
 
-/**
- * Busca todo o conhecimento da coleção 'perguntas_respostas' no Firestore.
- * @return {Promise<string>} Uma string formatada com todo o conhecimento.
- */
-async function getKnowledgeBase() {
-  const db = getFirestore();
-  const snapshot = await db.collection("perguntas_respostas").get();
-  if (snapshot.empty) {
-    return "Nenhum conhecimento foi encontrado.";
-  }
-  let knowledgeBase = "";
-  snapshot.forEach((doc) => {
-    const data = doc.data();
-    knowledgeBase += `Pergunta: ${data.pergunta}\nResposta: ${data.resposta}\n\n`;
-  });
-  return knowledgeBase;
-}
+    <!-- Scripts do Firebase -->
+    <script src="/__/firebase/9.6.1/firebase-app-compat.js"></script>
+    <script src="/__/firebase/9.6.1/firebase-auth-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
 
-/**
- * Formata o prompt final para ser enviado ao modelo de IA.
- * @param {string} knowledge - O conhecimento extraído do Firestore.
- * @param {string} query - A pergunta do utilizador.
- * @return {string} O prompt formatado.
- */
-function formatPrompt(knowledge, query) {
-  const systemInstructions = [
-    "Você é um assistente virtual interno chamado \"G-Bot\".",
-    "Seja prestável, direto e amigável.",
-    "Responda à pergunta do utilizador usando apenas o CONHECIMENTO FORNECIDO.",
-    "Se a resposta não estiver no conhecimento, diga que não tem a informação.",
-  ].join(" ");
-  const knowledgeBlock = [
-    "--- CONHECIMENTO FORNECIDO ---",
-    knowledge,
-    "---",
-    `PERGUNTA DO UTILIZADOR:\n"${query}"`,
-  ].join("\n");
-  return `<s>[INST] ${systemInstructions} \n\n ${knowledgeBlock} [/INST]`;
-}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const auth = firebase.auth();
 
-// --- Cloud Functions ---
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            const authButton = document.getElementById('auth-button');
+            const toggleLink = document.getElementById('toggle-link');
+            const formTitle = document.getElementById('form-title');
+            const authButtonText = document.getElementById('auth-button-text');
+            const toggleText = document.getElementById('toggle-text');
+            const notificationContainer = document.getElementById('notification-container');
 
-/**
- * Função principal que interage com a API do Hugging Face.
- */
-exports.askHuggingFace = onCall(async (request) => {
-  const userQuery = request.data.query;
-  if (!userQuery) {
-    throw new HttpsError("invalid-argument", "A função precisa de receber um parâmetro 'query'.");
-  }
-  try {
-    const knowledge = await getKnowledgeBase();
-    const finalPrompt = formatPrompt(knowledge, userQuery);
-    const hf = new HfInference(hfApiKey.value());
-    const response = await hf.textGeneration({
-      model: "mistralai/Mistral-7B-Instruct-v0.2",
-      inputs: finalPrompt,
-      parameters: { max_new_tokens: 250, temperature: 0.7, repetition_penalty: 1.1 },
-    });
-    return {reply: response.generated_text};
-  } catch (error) {
-    logger.error("Ocorreu um erro no processo da função:", error);
-    throw new HttpsError("internal", "Não foi possível processar a resposta do modelo de IA.");
-  }
-});
+            let isLoginMode = true;
 
-/**
- * Define um utilizador como administrador através de custom claims.
- * Apenas um administrador já existente pode chamar esta função.
- */
-exports.setAdminRole = onCall(async (request) => {
-  if (request.auth.token.admin !== true) {
-    throw new HttpsError("permission-denied", "Apenas administradores podem adicionar outros administradores.");
-  }
-  const email = request.data.email;
-  if (!email) {
-    throw new HttpsError("invalid-argument", "O email é obrigatório.");
-  }
-  try {
-    const user = await getAuth().getUserByEmail(email);
-    await getAuth().setCustomUserClaims(user.uid, { admin: true });
-    return { message: `Sucesso! ${email} agora é um administrador.` };
-  } catch (error) {
-    logger.error("Erro ao definir a função de admin para o email:", {email: email, error: error});
-    throw new HttpsError("internal", "Não foi possível encontrar o utilizador ou definir a permissão.");
-  }
-});
+            function showNotification(message, type = 'error') {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.textContent = message;
+                notificationContainer.appendChild(toast);
+                setTimeout(() => { toast.classList.add('show'); }, 10);
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => { toast.remove(); }, 500);
+                }, 4000);
+            }
 
-/**
- * Cria um novo utilizador no sistema.
- * Apenas um administrador pode chamar esta função.
- */
-exports.createUser = onCall(async (request) => {
-  if (request.auth.token.admin !== true) {
-    throw new HttpsError("permission-denied", "Apenas administradores podem criar novos utilizadores.");
-  }
+            function updateFormMode() {
+                if (isLoginMode) {
+                    formTitle.textContent = 'Login';
+                    authButtonText.textContent = 'Entrar';
+                    toggleText.innerHTML = 'Não tem uma conta? <a id="toggle-link-inner">Registe-se</a>';
+                } else {
+                    formTitle.textContent = 'Registo';
+                    authButtonText.textContent = 'Criar Conta';
+                    toggleText.innerHTML = 'Já tem uma conta? <a id="toggle-link-inner">Faça Login</a>';
+                }
+                document.getElementById('toggle-link-inner').addEventListener('click', () => {
+                    isLoginMode = !isLoginMode;
+                    updateFormMode();
+                });
+            }
+            
+            updateFormMode();
 
-  const { email, password, displayName, role } = request.data;
-  if (!email || !password || !displayName || !role) {
-    throw new HttpsError("invalid-argument", "Todos os campos (nome, e-mail, senha, tipo) são obrigatórios.");
-  }
+            authButton.addEventListener('click', () => {
+                const email = emailInput.value;
+                const password = passwordInput.value;
+                if (!email || !password) {
+                    return showNotification('Por favor, preencha todos os campos.');
+                }
 
-  try {
-    const userRecord = await getAuth().createUser({
-      email: email,
-      password: password,
-      displayName: displayName,
-    });
+                if (isLoginMode) {
+                    // Modo Login
+                    auth.signInWithEmailAndPassword(email, password)
+                        .then(userCredential => {
+                            window.location.href = '/app';
+                        })
+                        .catch(error => {
+                            showNotification('E-mail ou senha incorretos.');
+                        });
+                } else {
+                    // Modo Registo
+                    auth.createUserWithEmailAndPassword(email, password)
+                        .then(userCredential => {
+                            window.location.href = '/app';
+                        })
+                        .catch(error => {
+                            if (error.code === 'auth/email-already-in-use') {
+                                showNotification('Este e-mail já está em uso.');
+                            } else if (error.code === 'auth/weak-password') {
+                                showNotification('A senha deve ter pelo menos 6 caracteres.');
+                            } else {
+                                showNotification('Ocorreu um erro ao criar a conta.');
+                            }
+                        });
+                }
+            });
 
-    if (role === 'admin') {
-      await getAuth().setCustomUserClaims(userRecord.uid, { admin: true });
-    }
-
-    const db = getFirestore();
-    await db.collection('users').doc(userRecord.uid).set({
-      displayName: displayName,
-      email: email,
-      role: role,
-    });
-
-    return { message: `Utilizador ${displayName} criado com sucesso.` };
-  } catch (error) {
-    logger.error("Erro ao criar novo utilizador:", { email: email, error: error });
-    if (error.code === 'auth/email-already-exists') {
-        throw new HttpsError("already-exists", "Este e-mail já está a ser utilizado.");
-    }
-    throw new HttpsError("internal", "Ocorreu um erro ao criar o utilizador.");
-  }
-});
-
-/**
- * Lista todos os utilizadores do sistema.
- * Apenas um administrador pode chamar esta função.
- */
-exports.listUsers = onCall(async (request) => {
-    if (request.auth.token.admin !== true) {
-        throw new HttpsError("permission-denied", "Apenas administradores podem listar utilizadores.");
-    }
-    try {
-        const userRecords = await getAuth().listUsers(1000);
-        const users = userRecords.users.map((user) => ({
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || 'Sem nome',
-            role: user.customClaims && user.customClaims.admin ? 'admin' : 'comum',
-        }));
-        return { users: users };
-    } catch (error) {
-        logger.error("Erro ao listar utilizadores:", error);
-        throw new HttpsError("internal", "Ocorreu um erro ao buscar a lista de utilizadores.");
-    }
-});
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    window.location.href = '/app';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

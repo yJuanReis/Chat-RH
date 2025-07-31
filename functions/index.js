@@ -11,12 +11,16 @@ const {defineString} = require("firebase-functions/params");
 const hfApiKey = defineString("HUGGINGFACE_API_KEY");
 initializeApp();
 
-// --- Funções Auxiliares (EXISTENTES) ---
+// --- Funções Auxiliares ---
+
+/**
+ * Busca todo o conhecimento da coleção 'perguntas_respostas' no Firestore.
+ * @return {Promise<string>} Uma string formatada com todo o conhecimento.
+ */
 async function getKnowledgeBase() {
   const db = getFirestore();
   const snapshot = await db.collection("perguntas_respostas").get();
   if (snapshot.empty) {
-    logger.warn("A coleção 'perguntas_respostas' está vazia.");
     return "Nenhum conhecimento foi encontrado.";
   }
   let knowledgeBase = "";
@@ -27,6 +31,12 @@ async function getKnowledgeBase() {
   return knowledgeBase;
 }
 
+/**
+ * Formata o prompt final para ser enviado ao modelo de IA.
+ * @param {string} knowledge - O conhecimento extraído do Firestore.
+ * @param {string} query - A pergunta do utilizador.
+ * @return {string} O prompt formatado.
+ */
 function formatPrompt(knowledge, query) {
   const systemInstructions = [
     "Você é um assistente virtual interno chamado \"G-Bot\".",
@@ -43,11 +53,14 @@ function formatPrompt(knowledge, query) {
   return `<s>[INST] ${systemInstructions} \n\n ${knowledgeBlock} [/INST]`;
 }
 
-// --- Cloud Function Principal (EXISTENTE) ---
+// --- Cloud Functions ---
+
+/**
+ * Função principal que interage com a API do Hugging Face.
+ */
 exports.askHuggingFace = onCall(async (request) => {
   const userQuery = request.data.query;
   if (!userQuery) {
-    logger.error("A função foi chamada sem o parâmetro 'query'.");
     throw new HttpsError("invalid-argument", "A função precisa de receber um parâmetro 'query'.");
   }
   try {
@@ -66,29 +79,89 @@ exports.askHuggingFace = onCall(async (request) => {
   }
 });
 
-// --- FUNÇÃO PARA DEFINIR ADMINS (COM SEGURANÇA REATIVADA) ---
+/**
+ * Define um utilizador como administrador através de custom claims.
+ * Apenas um administrador já existente pode chamar esta função.
+ */
 exports.setAdminRole = onCall(async (request) => {
-  // A verificação de segurança foi reativada.
   if (request.auth.token.admin !== true) {
-    logger.warn("Utilizador não-admin tentou definir um novo admin.", {uid: request.auth.uid});
-    throw new HttpsError(
-      "permission-denied",
-      "Apenas administradores podem adicionar outros administradores."
-    );
+    throw new HttpsError("permission-denied", "Apenas administradores podem adicionar outros administradores.");
   }
-
   const email = request.data.email;
   if (!email) {
     throw new HttpsError("invalid-argument", "O email é obrigatório.");
   }
-
   try {
     const user = await getAuth().getUserByEmail(email);
     await getAuth().setCustomUserClaims(user.uid, { admin: true });
-    logger.info(`Utilizador ${email} (UID: ${user.uid}) foi promovido a admin por ${request.auth.uid}.`);
     return { message: `Sucesso! ${email} agora é um administrador.` };
   } catch (error) {
     logger.error("Erro ao definir a função de admin para o email:", {email: email, error: error});
     throw new HttpsError("internal", "Não foi possível encontrar o utilizador ou definir a permissão.");
   }
+});
+
+/**
+ * Cria um novo utilizador no sistema.
+ * Apenas um administrador pode chamar esta função.
+ */
+exports.createUser = onCall(async (request) => {
+  if (request.auth.token.admin !== true) {
+    throw new HttpsError("permission-denied", "Apenas administradores podem criar novos utilizadores.");
+  }
+
+  const { email, password, displayName, role } = request.data;
+  if (!email || !password || !displayName || !role) {
+    throw new HttpsError("invalid-argument", "Todos os campos (nome, e-mail, senha, tipo) são obrigatórios.");
+  }
+
+  try {
+    const userRecord = await getAuth().createUser({
+      email: email,
+      password: password,
+      displayName: displayName,
+    });
+
+    if (role === 'admin') {
+      await getAuth().setCustomUserClaims(userRecord.uid, { admin: true });
+    }
+
+    const db = getFirestore();
+    await db.collection('users').doc(userRecord.uid).set({
+      displayName: displayName,
+      email: email,
+      role: role,
+    });
+
+    return { message: `Utilizador ${displayName} criado com sucesso.` };
+  } catch (error) {
+    logger.error("Erro ao criar novo utilizador:", { email: email, error: error });
+    if (error.code === 'auth/email-already-exists') {
+        throw new HttpsError("already-exists", "Este e-mail já está a ser utilizado.");
+    }
+    throw new HttpsError("internal", "Ocorreu um erro ao criar o utilizador.");
+  }
+});
+
+/**
+ * Lista todos os utilizadores do sistema.
+ * Apenas um administrador pode chamar esta função.
+ */
+exports.listUsers = onCall(async (request) => {
+    if (request.auth.token.admin !== true) {
+        throw new HttpsError("permission-denied", "Apenas administradores podem listar utilizadores.");
+    }
+    try {
+        const userRecords = await getAuth().listUsers(1000);
+        const users = userRecords.users.map((user) => ({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || 'Sem nome',
+            role: user.customClaims && user.customClaims.admin ? 'admin' : 'comum',
+        }));
+        return { users: users };
+    } catch (error) {
+        logger.error("Erro ao listar utilizadores:", error);
+        throw new HttpsError("internal", "Ocorreu um erro ao buscar a lista de utilizadores.");
+    }
 });
