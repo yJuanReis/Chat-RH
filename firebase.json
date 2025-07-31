@@ -18,12 +18,17 @@
   ],
   "hosting": {
     "public": "public",
+    "cleanUrls": true,
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
     "rewrites": [
+      {
+        "source": "/app{,/**}",
+        "destination": "/app.html"
+      },
       {
         "source": "**",
         "destination": "/index.html"

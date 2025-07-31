@@ -1,250 +1,167 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Assistente Virtual</title>
-    <style>
-        :root {
-            --cor-fundo: #f0f2f5;
-            --cor-texto: #333;
-            --cor-borda: #e5e7eb;
-            --sombra: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            color: var(--cor-texto); 
-            font-size: 16px;
-            background: linear-gradient(315deg, #7f5a83, #0d324d, #5b42f3, #00ddeb);
-            background-size: 400% 400%;
-            animation: gradientAnimation 15s ease infinite;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        @keyframes gradientAnimation {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
+// Importações de Módulos Essenciais
+const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {initializeApp} = require("firebase-admin/app");
+const {getFirestore} = require("firebase-admin/firestore");
+const {getAuth} = require("firebase-admin/auth");
+const {HfInference} = require("@huggingface/inference");
+const logger = require("firebase-functions/logger");
+const {defineString} = require("firebase-functions/params");
 
-        .chat-container {
-            width: 100%;
-            max-width: 600px;
-            height: 80vh;
-            max-height: 700px;
-            background-color: rgba(255, 255, 255, 0.9);
-            box-shadow: var(--sombra);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-radius: 1rem;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
+// --- Configuração Inicial ---
+const hfApiKey = defineString("HUGGINGFACE_API_KEY");
+initializeApp();
 
-        .chat-header {
-            padding: 1rem;
-            background-color: rgba(255, 255, 255, 0.8);
-            border-bottom: 1px solid var(--cor-borda);
-            text-align: center;
-            font-weight: 600;
-            font-size: 1.2rem;
-        }
+// --- Funções Auxiliares ---
 
-        .chat-messages {
-            flex-grow: 1;
-            padding: 1rem;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
+/**
+ * Busca todo o conhecimento da coleção 'perguntas_respostas' no Firestore.
+ * @return {Promise<string>} Uma string formatada com todo o conhecimento.
+ */
+async function getKnowledgeBase() {
+  const db = getFirestore();
+  const snapshot = await db.collection("perguntas_respostas").get();
+  if (snapshot.empty) {
+    return "Nenhum conhecimento foi encontrado.";
+  }
+  let knowledgeBase = "";
+  snapshot.forEach((doc) => {
+    const data = doc.data();
+    knowledgeBase += `Pergunta: ${data.pergunta}\nResposta: ${data.resposta}\n\n`;
+  });
+  return knowledgeBase;
+}
 
-        .message {
-            max-width: 80%;
-            padding: 0.75rem 1rem;
-            border-radius: 1.2rem;
-            margin-bottom: 1rem;
-            line-height: 1.4;
-            opacity: 0;
-            transform: translateY(20px);
-            animation: fadeIn 0.3s forwards;
-        }
-        @keyframes fadeIn {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        .user-message {
-            background-color: #007aff;
-            color: white;
-            align-self: flex-end;
-            border-bottom-right-radius: 0.25rem;
-        }
-        .bot-message {
-            background-color: #e5e5ea;
-            color: black;
-            align-self: flex-start;
-            border-bottom-left-radius: 0.25rem;
-        }
-        .bot-message.typing {
-            display: flex;
-            align-items: center;
-        }
-        .bot-message.typing span {
-            height: 8px;
-            width: 8px;
-            margin: 0 2px;
-            background-color: #9e9e9e;
-            display: block;
-            border-radius: 50%;
-            opacity: 0.4;
-            animation: typingAnimation 1s infinite;
-        }
-        .bot-message.typing span:nth-child(2) { animation-delay: 0.2s; }
-        .bot-message.typing span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes typingAnimation {
-            50% { opacity: 1; }
-        }
+/**
+ * Formata o prompt final para ser enviado ao modelo de IA.
+ * @param {string} knowledge - O conhecimento extraído do Firestore.
+ * @param {string} query - A pergunta do utilizador.
+ * @return {string} O prompt formatado.
+ */
+function formatPrompt(knowledge, query) {
+  const systemInstructions = [
+    "Você é um assistente virtual interno chamado \"G-Bot\".",
+    "Seja prestável, direto e amigável.",
+    "Responda à pergunta do utilizador usando apenas o CONHECIMENTO FORNECIDO.",
+    "Se a resposta não estiver no conhecimento, diga que não tem a informação.",
+  ].join(" ");
+  const knowledgeBlock = [
+    "--- CONHECIMENTO FORNECIDO ---",
+    knowledge,
+    "---",
+    `PERGUNTA DO UTILIZADOR:\n"${query}"`,
+  ].join("\n");
+  return `<s>[INST] ${systemInstructions} \n\n ${knowledgeBlock} [/INST]`;
+}
 
-        .chat-input-area {
-            display: flex;
-            padding: 1rem;
-            border-top: 1px solid var(--cor-borda);
-            background-color: rgba(255, 255, 255, 0.8);
-        }
-        .chat-input {
-            flex-grow: 1;
-            border: none;
-            padding: 0.75rem;
-            font-size: 1rem;
-            border-radius: 1.5rem;
-            background-color: #eee;
-            outline: none;
-            margin-right: 0.5rem;
-        }
-        .send-button {
-            background-image: linear-gradient(144deg, #af40ff, #5b42f3 50%, #00ddeb);
-            border: 0;
-            border-radius: 50%;
-            color: #ffffff;
-            width: 50px;
-            height: 50px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .send-button:hover { transform: scale(1.1); }
-        .send-button svg {
-            width: 24px;
-            height: 24px;
-        }
-    </style>
-</head>
-<body>
+// --- Cloud Functions ---
 
-<div class="chat-container">
-    <div class="chat-header">Assistente Virtual</div>
-    <div class="chat-messages" id="chat-messages">
-        <div class="message bot-message">
-            Olá! Sou o assistente virtual. Como posso ajudar?
-        </div>
-    </div>
-    <div class="chat-input-area">
-        <input type="text" id="user-input" class="chat-input" placeholder="Escreva a sua pergunta...">
-        <button id="send-button" class="send-button">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>
-        </button>
-    </div>
-</div>
-
-<!-- Scripts do Firebase -->
-<script src="/__/firebase/9.6.1/firebase-app-compat.js"></script>
-<script src="/__/firebase/9.6.1/firebase-functions-compat.js"></script>
-<script src="/__/firebase/init.js"></script>
-    
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Inicializa o serviço de Cloud Functions
-    const functions = firebase.functions();
-
-    // Seletores dos elementos da página
-    const chatMessages = document.getElementById('chat-messages');
-    const userInput = document.getElementById('user-input');
-    const sendButton = document.getElementById('send-button');
-
-    // Função para adicionar uma mensagem à janela de chat
-    function addMessage(text, sender) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${sender}-message`;
-        messageDiv.textContent = text;
-        chatMessages.appendChild(messageDiv);
-        // Rola para a mensagem mais recente
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    // Função para mostrar/esconder o indicador de "a escrever..."
-    function showTypingIndicator(show) {
-        let typingDiv = document.getElementById('typing-indicator');
-        if (show) {
-            if (!typingDiv) {
-                typingDiv = document.createElement('div');
-                typingDiv.id = 'typing-indicator';
-                typingDiv.className = 'message bot-message typing';
-                typingDiv.innerHTML = '<span></span><span></span><span></span>';
-                chatMessages.appendChild(typingDiv);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
-        } else {
-            if (typingDiv) {
-                typingDiv.remove();
-            }
-        }
-    }
-
-    // Função principal para enviar a pergunta
-    async function sendMessage() {
-        const query = userInput.value.trim();
-        if (query === '') return;
-
-        // Mostra a mensagem do utilizador na tela
-        addMessage(query, 'user');
-        userInput.value = '';
-
-        // Mostra o indicador "a escrever..."
-        showTypingIndicator(true);
-
-        try {
-            // Chama a nossa Cloud Function 'askHuggingFace'
-            const askHuggingFace = functions.httpsCallable('askHuggingFace');
-            const result = await askHuggingFace({ query: query });
-
-            // Esconde o indicador e mostra a resposta do bot
-            showTypingIndicator(false);
-            addMessage(result.data.reply, 'bot');
-
-        } catch (error) {
-            console.error("Erro ao chamar a Cloud Function:", error);
-            showTypingIndicator(false);
-            addMessage("Desculpe, ocorreu um erro ao tentar obter uma resposta. Tente novamente.", 'bot');
-        }
-    }
-
-    // Adiciona os "ouvintes" de eventos
-    sendButton.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', function(event) {
-        if (event.key === 'Enter') {
-            sendMessage();
-        }
+/**
+ * Função principal que interage com a API do Hugging Face.
+ */
+exports.askHuggingFace = onCall(async (request) => {
+  const userQuery = request.data.query;
+  if (!userQuery) {
+    throw new HttpsError("invalid-argument", "A função precisa de receber um parâmetro 'query'.");
+  }
+  try {
+    const knowledge = await getKnowledgeBase();
+    const finalPrompt = formatPrompt(knowledge, userQuery);
+    const hf = new HfInference(hfApiKey.value());
+    const response = await hf.textGeneration({
+      model: "mistralai/Mistral-7B-Instruct-v0.2",
+      inputs: finalPrompt,
+      parameters: { max_new_tokens: 250, temperature: 0.7, repetition_penalty: 1.1 },
     });
+    return {reply: response.generated_text};
+  } catch (error) {
+    logger.error("Ocorreu um erro no processo da função:", error);
+    throw new HttpsError("internal", "Não foi possível processar a resposta do modelo de IA.");
+  }
 });
-</script>
 
-</body>
-</html>
+/**
+ * Define um utilizador como administrador através de custom claims.
+ * Apenas um administrador já existente pode chamar esta função.
+ */
+exports.setAdminRole = onCall(async (request) => {
+  if (request.auth.token.admin !== true) {
+    throw new HttpsError("permission-denied", "Apenas administradores podem adicionar outros administradores.");
+  }
+  const email = request.data.email;
+  if (!email) {
+    throw new HttpsError("invalid-argument", "O email é obrigatório.");
+  }
+  try {
+    const user = await getAuth().getUserByEmail(email);
+    await getAuth().setCustomUserClaims(user.uid, { admin: true });
+    return { message: `Sucesso! ${email} agora é um administrador.` };
+  } catch (error) {
+    logger.error("Erro ao definir a função de admin para o email:", {email: email, error: error});
+    throw new HttpsError("internal", "Não foi possível encontrar o utilizador ou definir a permissão.");
+  }
+});
+
+/**
+ * Cria um novo utilizador no sistema.
+ * Apenas um administrador pode chamar esta função.
+ */
+exports.createUser = onCall(async (request) => {
+  if (request.auth.token.admin !== true) {
+    throw new HttpsError("permission-denied", "Apenas administradores podem criar novos utilizadores.");
+  }
+
+  const { email, password, displayName, role } = request.data;
+  if (!email || !password || !displayName || !role) {
+    throw new HttpsError("invalid-argument", "Todos os campos (nome, e-mail, senha, tipo) são obrigatórios.");
+  }
+
+  try {
+    const userRecord = await getAuth().createUser({
+      email: email,
+      password: password,
+      displayName: displayName,
+    });
+
+    if (role === 'admin') {
+      await getAuth().setCustomUserClaims(userRecord.uid, { admin: true });
+    }
+
+    const db = getFirestore();
+    await db.collection('users').doc(userRecord.uid).set({
+      displayName: displayName,
+      email: email,
+      role: role,
+    });
+
+    return { message: `Utilizador ${displayName} criado com sucesso.` };
+  } catch (error) {
+    logger.error("Erro ao criar novo utilizador:", { email: email, error: error });
+    if (error.code === 'auth/email-already-exists') {
+        throw new HttpsError("already-exists", "Este e-mail já está a ser utilizado.");
+    }
+    throw new HttpsError("internal", "Ocorreu um erro ao criar o utilizador.");
+  }
+});
+
+/**
+ * Lista todos os utilizadores do sistema.
+ * Apenas um administrador pode chamar esta função.
+ */
+exports.listUsers = onCall(async (request) => {
+    if (request.auth.token.admin !== true) {
+        throw new HttpsError("permission-denied", "Apenas administradores podem listar utilizadores.");
+    }
+    try {
+        const userRecords = await getAuth().listUsers(1000);
+        const users = userRecords.users.map((user) => ({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || 'Sem nome',
+            role: user.customClaims && user.customClaims.admin ? 'admin' : 'comum',
+        }));
+        return { users: users };
+    } catch (error) {
+        logger.error("Erro ao listar utilizadores:", error);
+        throw new HttpsError("internal", "Ocorreu um erro ao buscar a lista de utilizadores.");
+    }
+});

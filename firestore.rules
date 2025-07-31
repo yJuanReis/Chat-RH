@@ -1,46 +1,28 @@
-rules_version = '2'; // Usamos a versão 2 das regras, que é a mais recente e segura.
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Regras para a coleção 'users' (perfis de usuário)
-    // Basicamente, qualquer usuário autenticado pode ler *todos* os perfis de usuário,
-    // mas só pode atualizar *o seu próprio* perfil.
-    // Isso é útil para, por exemplo, um administrador listar todos os usuários,
-    // ou para que um usuário possa ver detalhes básicos de outros se necessário.
+    // Regra para perfis de usuário (sem alterações)
     match /users/{userId} {
-      allow read: if request.auth != null; // Qualquer usuário logado pode ler
-      allow update: if request.auth != null && request.auth.uid == userId; // Só pode atualizar o próprio perfil
-      allow create: if request.auth != null; // Permite a criação de um novo perfil de usuário no registro
-      // A exclusão de usuários será tratada pelo backend (Firebase Admin SDK),
-      // que tem privilégios totais e não é restrito por essas regras.
+      allow read: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
     }
 
-    // Regras para as conversas do chat
-    // Estas regras são mais específicas, protegendo os dados de cada usuário.
-    // Elas seguem o caminho que definimos no código:
-    // /artifacts/{appId}/users/{userId}/chats/{chatId}
-    match /artifacts/{appId}/users/{userId}/chats/{chatId} {
-      // Permite ler e escrever apenas se o usuário estiver autenticado
-      // E se o 'userId' no caminho do documento for igual ao UID (identificador único) do usuário logado.
+    // REGRA ATUALIZADA: Adicionada permissão para a subcoleção de mensagens
+    match /users/{userId}/messages/{messageId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // ATENÇÃO: Regras para acesso ADMIN (se você tiver uma rota de backend para isso)
-    // Se o seu backend Flask estiver usando o Firebase Admin SDK para gerenciar usuários (como sugerido),
-    // ele **NÃO** é afetado por estas regras de segurança do cliente. O Admin SDK tem privilégios totais.
-    // Portanto, não precisamos de regras "allow delete" ou "allow write" aqui para operações de admin
-    // que vêm do seu backend. Se você tiver alguma operação de admin que venha diretamente
-    // do frontend (o que não é recomendado), você precisaria de regras mais complexas com base em 'role'.
-
-    // Exemplo de como seria uma regra baseada em papel (NÃO RECOMENDADO DIRETAMENTE DO CLIENTE):
-    /*
-    match /adminData/{documentId} {
-      allow read, write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    // Regra para conversas do chat (antiga, pode ser removida se não for usada)
+    match /artifacts/{appId}/users/{userId}/chats/{chatId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    */
-    // Recomendo fortemente que todas as operações administrativas (criar/deletar outros usuários)
-    // sejam feitas EXCLUSIVAMENTE pelo seu backend Python usando o Firebase Admin SDK,
-    // pois ele pode bypassar essas regras de segurança do cliente.
+
+    // Regra para a base de conhecimento (sem alterações)
+    match /perguntas_respostas/{docId} {
+      allow read, write: if request.auth != null && request.auth.token.admin == true;
+    }
   }
 }

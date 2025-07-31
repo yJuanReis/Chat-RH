@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot RH</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --cor-container: rgba(255, 255, 255, 0.95);
+            --cor-texto: #333;
+            --cor-borda: #e5e7eb;
+            --cor-perigo: #dc3545;
+            --cor-aviso: #ffc107;
+            --cor-primaria: #5b42f3;
+            --sombra: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            color: var(--cor-texto); 
+            background: linear-gradient(315deg, #7f5a83, #0d324d, #5b42f3, #00ddeb);
+            background-size: 400% 400%;
+            animation: gradientAnimation 15s ease infinite;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        @keyframes gradientAnimation { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+        /* --- Barra Lateral --- */
+        .sidebar {
+            width: 250px;
+            background-color: #111827;
+            color: white;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s;
+        }
+        .sidebar-header { text-align: center; margin-bottom: 30px; }
+        .sidebar-header h1 { font-size: 1.5rem; }
+        .sidebar nav a {
+            display: flex;
+            align-items: center;
+            color: #d1d5db;
+            text-decoration: none;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .sidebar nav a:hover, .sidebar nav a.active {
+            background-color: var(--cor-primaria);
+            color: white;
+        }
+        .sidebar nav a i { width: 30px; text-align: center; font-size: 1.2rem; }
+        .sidebar .logout-section { margin-top: auto; }
+
+        /* --- Conteúdo Principal --- */
+        .main-content {
+            flex-grow: 1;
+            padding: 30px;
+            overflow-y: auto;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .view { display: none; width: 100%; height: 100%;}
+        .view.active { display: block; }
+        
+        /* --- Estilos do Chat --- */
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            height: calc(100vh - 60px);
+            background-color: rgba(255, 255, 255, 0.9);
+            box-shadow: var(--sombra);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 1rem;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            padding: 1rem;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-bottom: 1px solid var(--cor-borda);
+            text-align: center;
+            font-weight: 600;
+            font-size: 1.2rem;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .message {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            border-radius: 1.2rem;
+            margin-bottom: 1rem;
+            line-height: 1.4;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeIn 0.3s forwards;
+        }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+        .user-message {
+            background-color: #007aff;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .bot-message {
+            background-color: #e5e5ea;
+            color: black;
+            align-self: flex-start;
+            border-bottom-left-radius: 0.25rem;
+        }
+        .chat-input-area {
+            display: flex;
+            padding: 1rem;
+            border-top: 1px solid var(--cor-borda);
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+        .chat-input {
+            flex-grow: 1;
+            border: none;
+            padding: 0.75rem;
+            font-size: 1rem;
+            border-radius: 1.5rem;
+            background-color: #eee;
+            outline: none;
+            margin-right: 0.5rem;
+        }
+        .send-button {
+            background-image: linear-gradient(144deg, #af40ff, #5b42f3 50%, #00ddeb);
+            border: 0;
+            border-radius: 50%;
+            color: #ffffff;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .send-button:hover { transform: scale(1.1); }
+        .send-button svg { width: 24px; height: 24px; }
+
+
+        /* --- Estilos do Admin --- */
+        .admin-container { background: var(--cor-container); padding: 30px; border-radius: 8px; box-shadow: var(--sombra); }
+        h2 { margin-top: 30px; margin-bottom: 15px; font-size: 1.4rem; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        textarea, .form-input, select.form-input { appearance: none; background-color: #f3f4f6; border: 1px solid var(--cor-borda); padding: 1rem; font-size: 1rem; width: 100%; border-radius: 1rem; color: #3d3d3d; outline: none; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .btn { font-size: 1rem; font-weight: 500; padding: 10px 15px; border-radius: 6px; color: white; border: none; cursor: pointer; transition: all 0.2s; }
+        .btn-danger { background-color: var(--cor-perigo); }
+        .btn-warning { background-color: var(--cor-aviso); }
+        .btn-primary { background-color: var(--cor-primaria); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 1rem; }
+        th, td { padding: 14px; text-align: left; border-bottom: 1px solid var(--cor-borda); }
+        th { background-color: #f8f8f8; font-weight: 600; }
+        .actions .btn { font-size: 0.85em; padding: 6px 10px; }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="sidebar-header"><h1>G-Bot RH</h1></div>
+        <nav>
+            <a href="#" id="nav-chat" class="active"><i class="fas fa-comments"></i><span>Chat</span></a>
+            <a href="#" id="nav-admin" style="display: none;"><i class="fas fa-cogs"></i><span>Admin</span></a>
+        </nav>
+        <div class="logout-section">
+            <a href="#" id="logout-button"><i class="fas fa-sign-out-alt"></i><span>Sair</span></a>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <!-- Visualização do Chat -->
+        <div id="chat-view" class="view active">
+            <div class="chat-container">
+                <div class="chat-header">Assistente Virtual</div>
+                <div class="chat-messages" id="chat-messages">
+                    <!-- As mensagens do histórico serão carregadas aqui -->
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="user-input" class="chat-input" placeholder="Escreva a sua pergunta...">
+                    <button id="send-button" class="send-button">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualização do Admin -->
+        <div id="admin-view" class="view">
+            <div class="admin-container">
+                
+                <!-- NOVA SECÇÃO: GESTÃO DE UTILIZADORES -->
+                <section id="user-management-section">
+                    <h2>Gestão de Utilizadores</h2>
+                    <div class="form-grid">
+                        <input type="text" id="new-user-name" class="form-input" placeholder="Nome completo">
+                        <input type="email" id="new-user-email" class="form-input" placeholder="E-mail">
+                        <input type="password" id="new-user-password" class="form-input" placeholder="Senha">
+                        <select id="new-user-role" class="form-input">
+                            <option value="comum">Utilizador Comum</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <button id="create-user-button" class="btn btn-primary" style="margin-top: 15px;">Criar Utilizador</button>
+                    
+                    <h3 style="margin-top: 30px;">Utilizadores Registados</h3>
+                    <div class="table-wrapper">
+                        <table id="users-table">
+                            <thead><tr><th>Nome</th><th>Email</th><th>Tipo</th></tr></thead>
+                            <tbody><!-- A lista de utilizadores será inserida aqui --></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <hr style="margin: 40px 0; border: 1px solid #eee;">
+
+                <!-- SECÇÃO EXISTENTE: GESTÃO DE CONHECIMENTO -->
+                <section id="knowledge-management-section">
+                    <h2>Gestão de Conhecimento</h2>
+                    <textarea id="new-question" rows="2" placeholder="Digite a pergunta do usuário"></textarea>
+                    <textarea id="new-answer" rows="4" placeholder="Digite a resposta que o bot deve dar"></textarea>
+                    <button id="add-button" class="btn btn-primary">Adicionar Conhecimento</button>
+                    <h3 style="margin-top: 30px;">Base Cadastrada</h3>
+                    <input type="search" id="search-input" class="form-input" placeholder="Pesquisar na base..." style="margin-bottom: 20px;">
+                    <div class="table-wrapper">
+                        <table id="knowledge-table">
+                            <thead><tr><th>Pergunta</th><th>Resposta</th><th>Ações</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts do Firebase -->
+    <script src="/__/firebase/9.6.1/firebase-app-compat.js"></script>
+    <script src="/__/firebase/9.6.1/firebase-auth-compat.js"></script>
+    <script src="/__/firebase/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="/__/firebase/9.6.1/firebase-functions-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const auth = firebase.auth();
+            const db = firebase.firestore();
+            const functions = firebase.functions();
+
+            let currentUser = null;
+            let messagesUnsubscribe = null;
+
+            // --- Lógica de Autenticação e Navegação ---
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    currentUser = user;
+                    const idTokenResult = await user.getIdTokenResult();
+                    if (idTokenResult.claims.admin === true) {
+                        document.getElementById('nav-admin').style.display = 'flex';
+                    }
+                    loadAndListenForMessages(user.uid);
+                } else {
+                    if (messagesUnsubscribe) messagesUnsubscribe();
+                    window.location.href = '/';
+                }
+            });
+
+            const navChat = document.getElementById('nav-chat');
+            const navAdmin = document.getElementById('nav-admin');
+            const chatView = document.getElementById('chat-view');
+            const adminView = document.getElementById('admin-view');
+            const logoutButton = document.getElementById('logout-button');
+
+            function switchView(viewToShow) {
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+                viewToShow.classList.add('active');
+                if (viewToShow.id === 'chat-view') navChat.classList.add('active');
+                if (viewToShow.id === 'admin-view') {
+                    navAdmin.classList.add('active');
+                    loadAdminData();
+                }
+            }
+
+            navChat.addEventListener('click', (e) => { e.preventDefault(); switchView(chatView); });
+            navAdmin.addEventListener('click', (e) => { e.preventDefault(); switchView(adminView); });
+            logoutButton.addEventListener('click', (e) => { e.preventDefault(); auth.signOut(); });
+
+            // --- Lógica do Chat ---
+            const chatMessages = document.getElementById('chat-messages');
+            const userInput = document.getElementById('user-input');
+            const sendButton = document.getElementById('send-button');
+
+            function addMessageToUI(text, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}-message`;
+                messageDiv.textContent = text;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            function loadAndListenForMessages(userId) {
+                const messagesRef = db.collection('users').doc(userId).collection('messages').orderBy('timestamp');
+                
+                messagesUnsubscribe = messagesRef.onSnapshot(snapshot => {
+                    chatMessages.innerHTML = '';
+                    if (snapshot.empty) {
+                        addMessageToUI('Olá! Sou o assistente virtual. Como posso ajudar?', 'bot');
+                    } else {
+                        snapshot.forEach(doc => {
+                            const message = doc.data();
+                            addMessageToUI(message.text, message.role);
+                        });
+                    }
+                });
+            }
+
+            async function sendMessage() {
+                const query = userInput.value.trim();
+                if (query === '' || !currentUser) return;
+                
+                const userMessage = { role: 'user', text: query, timestamp: firebase.firestore.FieldValue.serverTimestamp() };
+                const messagesRef = db.collection('users').doc(currentUser.uid).collection('messages');
+                await messagesRef.add(userMessage);
+                userInput.value = '';
+
+                try {
+                    const askHuggingFace = functions.httpsCallable('askHuggingFace');
+                    const result = await askHuggingFace({ query: query });
+                    const botMessage = { role: 'bot', text: result.data.reply, timestamp: firebase.firestore.FieldValue.serverTimestamp() };
+                    await messagesRef.add(botMessage);
+                } catch (error) {
+                    console.error("Erro na Cloud Function:", error);
+                    const errorMessage = { role: 'bot', text: "Desculpe, ocorreu um erro.", timestamp: firebase.firestore.FieldValue.serverTimestamp() };
+                    await messagesRef.add(errorMessage);
+                }
+            }
+
+            sendButton.addEventListener('click', sendMessage);
+            userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+
+
+            // --- LÓGICA DO ADMIN ---
+            const createUserButton = document.getElementById('create-user-button');
+            const newUserNameInput = document.getElementById('new-user-name');
+            const newUserEmailInput = document.getElementById('new-user-email');
+            const newUserPasswordInput = document.getElementById('new-user-password');
+            const newUserRoleInput = document.getElementById('new-user-role');
+            const usersTableBody = document.querySelector("#users-table tbody");
+            const knowledgeTableBody = document.querySelector("#knowledge-table tbody");
+            const addButton = document.getElementById('add-button');
+            const newQuestionInput = document.getElementById('new-question');
+            const newAnswerInput = document.getElementById('new-answer');
+            const searchInput = document.getElementById('search-input');
+            let allKnowledge = [];
+
+            async function loadAdminData() {
+                loadUsersList();
+                loadKnowledge();
+            }
+
+            async function loadUsersList() {
+                try {
+                    const listUsers = functions.httpsCallable('listUsers');
+                    const result = await listUsers();
+                    usersTableBody.innerHTML = '';
+                    result.data.users.forEach(user => {
+                        usersTableBody.innerHTML += `
+                            <tr>
+                                <td>${user.displayName}</td>
+                                <td>${user.email}</td>
+                                <td>${user.role}</td>
+                            </tr>`;
+                    });
+                } catch (error) {
+                    console.error("Erro ao listar utilizadores:", error);
+                    alert('Erro ao carregar a lista de utilizadores.');
+                }
+            }
+
+            createUserButton.addEventListener('click', async () => {
+                const displayName = newUserNameInput.value;
+                const email = newUserEmailInput.value;
+                const password = newUserPasswordInput.value;
+                const role = newUserRoleInput.value;
+                if (!displayName || !email || !password || !role) {
+                    return alert('Por favor, preencha todos os campos para criar um utilizador.');
+                }
+                try {
+                    const createUser = functions.httpsCallable('createUser');
+                    const result = await createUser({ displayName, email, password, role });
+                    alert(result.data.message);
+                    newUserNameInput.value = '';
+                    newUserEmailInput.value = '';
+                    newUserPasswordInput.value = '';
+                    loadUsersList();
+                } catch (error) {
+                    console.error("Erro ao criar utilizador:", error);
+                    alert('Erro: ' + error.message);
+                }
+            });
+
+            async function loadKnowledge() {
+                try {
+                    const snapshot = await db.collection('perguntas_respostas').get();
+                    allKnowledge = snapshot.docs;
+                    renderTable(allKnowledge);
+                } catch (error) {
+                    console.error("Erro ao carregar conhecimento:", error);
+                }
+            }
+            
+            function renderTable(docs) {
+                knowledgeTableBody.innerHTML = '';
+                docs.forEach(doc => {
+                    knowledgeTableBody.innerHTML += `
+                        <tr data-id="${doc.id}">
+                            <td>${doc.data().pergunta}</td>
+                            <td>${doc.data().resposta}</td>
+                            <td class="actions">
+                                <button class="btn btn-warning edit-button">Editar</button>
+                                <button class="btn btn-danger delete-button">Excluir</button>
+                            </td>
+                        </tr>`;
+                });
+            }
+
+            addButton.addEventListener('click', async () => {
+                const question = newQuestionInput.value.trim();
+                const answer = newAnswerInput.value.trim();
+                if (!question || !answer) return;
+                await db.collection('perguntas_respostas').add({ pergunta: question, resposta: answer });
+                newQuestionInput.value = '';
+                newAnswerInput.value = '';
+                loadKnowledge();
+            });
+            
+        });
+    </script>
+</body>
+</html>
