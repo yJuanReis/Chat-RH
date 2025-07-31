@@ -1,0 +1,2 @@
+# Normaliza todos os arquivos de texto para usar LF (o mais comum para projetos multiplataforma)
+* text=auto eol=lf

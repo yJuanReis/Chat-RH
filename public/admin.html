@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle - Chatbot</title>
+    <style>
+        /* --- Reset Básico e Estilo Global --- */
+        :root {
+            --cor-container: rgba(255, 255, 255, 0.9);
+            --cor-texto: #333;
+            --cor-borda: #e5e7eb;
+            --cor-perigo: #dc3545;
+            --cor-aviso: #ffc107;
+            --sombra: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            color: var(--cor-texto); 
+            line-height: 1.6;
+            font-size: 16px; /* Tamanho base da fonte aumentado */
+            /* Fundo animado inspirado no exemplo */
+            background: linear-gradient(315deg, #7f5a83, #0d324d, #5b42f3, #00ddeb);
+            background-size: 400% 400%;
+            animation: gradientAnimation 15s ease infinite;
+        }
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* --- Layout Principal --- */
+        .main-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        /* --- Estilo do Login (Inspirado nos Exemplos) --- */
+        .login-form {
+            padding: 2.5rem;
+            max-width: 420px;
+            width: 100%;
+            border-radius: 1rem;
+            background-color: var(--cor-container);
+            box-shadow: var(--sombra);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px); /* Efeito de vidro fosco */
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .login-form .form-title {
+            font-size: 1.6rem; /* Aumentado */
+            line-height: 1.75rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #111;
+        }
+        .login-form .input-container {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+        /* Estilo dos inputs inspirado no exemplo */
+        .form-input {
+            background-color: #eee;
+            border: none;
+            padding: 1rem;
+            font-size: 1rem; /* Aumentado */
+            width: 100%;
+            border-radius: 1rem;
+            color: #3d3d3d;
+            box-shadow: 0 0.4rem #dfd9d9;
+            cursor: pointer;
+            outline: none;
+        }
+        .form-input:focus {
+            outline: 2px solid #5b42f3;
+        }
+
+        /* --- Estilo do Painel de Admin --- */
+        .admin-container { 
+            width: 100%; 
+            max-width: 900px; 
+            background: var(--cor-container); 
+            padding: 30px; 
+            border-radius: 8px; 
+            box-shadow: var(--sombra);
+        }
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        h1, h2 { 
+            color: #444; 
+            margin: 0;
+            padding: 0;
+            border: none;
+        }
+        h1 { text-align: center; width: 100%; border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 1.8rem; } /* Aumentado */
+        h2 { margin-top: 20px; font-size: 1.4rem; } /* Aumentado */
+        textarea { resize: vertical; width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid var(--cor-borda); border-radius: 6px; font-size: 1rem; } /* Aumentado */
+        
+        /* --- Estilo dos Botões (Padronizado) --- */
+        .gradient-button {
+            background-image: linear-gradient(144deg, #af40ff, #5b42f3 50%, #00ddeb);
+            border: 0;
+            border-radius: 8px;
+            box-shadow: rgba(151, 65, 252, 0.2) 0 15px 30px -5px;
+            color: #ffffff;
+            padding: 3px;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+        }
+        .gradient-button:hover { outline: 0; transform: translateY(-2px); box-shadow: rgba(151, 65, 252, 0.3) 0 18px 35px -5px; }
+        .gradient-button span {
+            background-color: rgb(5, 6, 45);
+            padding: 16px 24px;
+            border-radius: 6px;
+            width: 100%;
+            height: 100%;
+            transition: 300ms;
+            display: block;
+            text-align: center;
+            font-weight: 500;
+            font-size: 1rem; /* Aumentado */
+        }
+        .gradient-button:hover span { background: none; }
+        .gradient-button:active { transform: scale(0.95); }
+        
+        /* Botões secundários e de ações */
+        .btn {
+            font-size: 1rem; /* Aumentado */
+            font-weight: 500;
+            padding: 10px 15px;
+            border-radius: 6px;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .btn-danger { background-color: var(--cor-perigo); }
+        .btn-warning { background-color: var(--cor-aviso); }
+
+        /* --- Tabela e Ações --- */
+        .table-wrapper { overflow-x: auto; }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px; 
+            border: 1px solid var(--cor-borda);
+            border-radius: 8px;
+            overflow: hidden; /* Garante que os cantos arredondados sejam aplicados */
+            font-size: 1rem; /* Tamanho da fonte da tabela aumentado */
+        }
+        th, td { 
+            padding: 14px 18px; 
+            text-align: left; 
+            vertical-align: middle; 
+            border-bottom: 1px solid var(--cor-borda);
+        }
+        th { 
+            background-color: #f8f8f8; 
+            font-weight: 600;
+        }
+        tbody tr {
+            transition: background-color 0.2s ease-in-out, transform 0.2s ease-in-out;
+        }
+        /* Efeito de Zebra (Contraste entre linhas) */
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        /* Efeito de Hover na linha */
+        tbody tr:hover {
+            background-color: #f1f1f1;
+            transform: scale(1.01);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .actions .btn {
+            font-size: 0.85em; /* Ajustado */
+            padding: 6px 10px;
+            margin-right: 5px;
+        }
+
+        /* --- Modal de Edição --- */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 10% auto; padding: 25px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; }
+        .close-button { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+
+        /* --- Sistema de Notificação --- */
+        .notification-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
+        .toast { padding: 12px; margin-bottom: 10px; border-radius: 8px; color: white; display: flex; align-items: center; box-shadow: var(--sombra); transform: translateX(120%); transition: transform 0.5s ease-in-out; font-size: 0.95rem; }
+        .toast.show { transform: translateX(0); }
+        .toast.success { background-color: #28a745; }
+        .toast.error { background-color: #dc3545; }
+
+        /* --- Loader --- */
+        .loader-overlay { display: none; position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.7); justify-content: center; align-items: center; }
+        #wifi-loader { width: 64px; height: 64px; position: relative; }
+        #wifi-loader svg { position: absolute; }
+        #wifi-loader svg circle { fill: none; stroke-width: 6px; stroke-linecap: round; transform: rotate(-100deg); transform-origin: center; }
+        #wifi-loader svg circle.back { stroke: #c3c8de; }
+        #wifi-loader svg circle.front { stroke: #4f29f0; }
+        #wifi-loader svg.circle-outer { height: 86px; width: 86px; }
+        #wifi-loader svg.circle-outer circle { stroke-dasharray: 62.75 188.25; animation: circle-outer135 1.8s ease infinite 0.3s; }
+        #wifi-loader svg.circle-outer circle.front { animation: circle-outer135 1.8s ease infinite 0.15s; }
+        @keyframes circle-outer135 { 0% { stroke-dashoffset: 25; } 25% { stroke-dashoffset: 0; } 65% { stroke-dashoffset: 301; } 80% { stroke-dashoffset: 276; } 100% { stroke-dashoffset: 276; } }
+
+    </style>
+</head>
+<body>
+
+<div class="main-wrapper">
+    <!-- Tela de Login: Visível apenas quando o usuário não está logado -->
+    <div id="login-screen">
+        <form class="login-form">
+            <p class="form-title">Acesso ao Painel</p>
+            <div class="input-container">
+                <input type="email" id="email" class="form-input" placeholder="Digite o e-mail">
+            </div>
+            <div class="input-container">
+                <input type="password" id="password" class="form-input" placeholder="Digite a senha">
+            </div>
+            <button type="button" id="login-button" class="gradient-button">
+                <span>Entrar</span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Painel de Administração: Visível apenas após o login -->
+    <div class="admin-container" id="admin-panel" style="display: none;">
+        <div class="admin-header">
+            <h1>Base de Conhecimento</h1>
+            <button id="logout-button" class="btn btn-danger">Sair</button>
+        </div>
+        
+        <h2>Adicionar Conhecimentos</h2>
+        <textarea id="new-question" rows="2" placeholder="Digite a pergunta do usuário"></textarea>
+        <textarea id="new-answer" rows="4" placeholder="Digite a resposta que o bot deve dar"></textarea>
+        <button id="add-button" class="gradient-button" style="width: auto;">
+            <span>Adicionar</span>
+        </button>
+        
+        <h2>Base Cadastrada</h2>
+        <input type="search" id="search-input" class="form-input" placeholder="Pesquisar na base..." style="margin-bottom: 20px;">
+        <div class="table-wrapper">
+            <table id="knowledge-table">
+                <thead>
+                    <tr><th>Pergunta</th><th>Resposta</th><th>Ações</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Edição -->
+<div id="edit-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2>Editar Conhecimento</h2>
+        <input type="hidden" id="edit-doc-id">
+        <textarea id="edit-question" rows="3"></textarea>
+        <textarea id="edit-answer" rows="5"></textarea>
+        <button id="save-edit-button" class="gradient-button">
+            <span>Salvar Alterações</span>
+        </button>
+    </div>
+</div>
+
+<!-- Container para Notificações -->
+<div id="notification-container" class="notification-container"></div>
+
+<!-- Loader Overlay -->
+<div id="loader-overlay" class="loader-overlay">
+    <div id="wifi-loader">
+        <svg class="circle-outer" viewBox="0 0 86 86"><circle class="back" cx="43" cy="43" r="40"></circle><circle class="front" cx="43" cy="43" r="40"></circle></svg>
+    </div>
+</div>
+
+<!-- Scripts do Firebase -->
+<script src="/__/firebase/9.6.1/firebase-app-compat.js"></script>
+<script src="/__/firebase/9.6.1/firebase-auth-compat.js"></script>
+<script src="/__/firebase/9.6.1/firebase-firestore-compat.js"></script>
+<script src="/__/firebase/init.js"></script>
+    
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // --- Seletores de Elementos ---
+    const loginScreen = document.getElementById('login-screen');
+    const adminPanel = document.getElementById('admin-panel');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const loginButton = document.getElementById('login-button');
+    const logoutButton = document.getElementById('logout-button');
+    const knowledgeTableBody = document.querySelector("#knowledge-table tbody");
+    const newQuestionInput = document.getElementById('new-question');
+    const newAnswerInput = document.getElementById('new-answer');
+    const addButton = document.getElementById('add-button');
+    const searchInput = document.getElementById('search-input'); // Novo seletor
+    const editModal = document.getElementById('edit-modal');
+    const editDocIdInput = document.getElementById('edit-doc-id');
+    const editQuestionInput = document.getElementById('edit-question');
+    const editAnswerInput = document.getElementById('edit-answer');
+    const saveEditButton = document.getElementById('save-edit-button');
+    const closeButton = document.querySelector('.close-button');
+    const loader = document.getElementById('loader-overlay');
+    const notificationContainer = document.getElementById('notification-container');
+
+    let allKnowledge = []; // Cache para guardar todos os documentos
+
+    // --- Funções de UI (Loader e Notificações) ---
+    const showLoader = () => { loader.style.display = 'flex'; };
+    const hideLoader = () => { loader.style.display = 'none'; };
+
+    function showNotification(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        notificationContainer.appendChild(toast);
+        setTimeout(() => { toast.classList.add('show'); }, 10);
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => { toast.remove(); }, 500);
+        }, 4000);
+    }
+
+    // --- NOVA FUNÇÃO PARA NORMALIZAR TEXTO (REMOVER ACENTOS) ---
+    function normalizeText(text) {
+        return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    // --- Funções Principais (Lógica do App) ---
+    function renderTable(docs) {
+        knowledgeTableBody.innerHTML = '';
+        docs.forEach(doc => {
+            const row = `
+                <tr data-id="${doc.id}">
+                    <td>${doc.data().pergunta}</td>
+                    <td>${doc.data().resposta}</td>
+                    <td class="actions">
+                        <button class="btn btn-warning edit-button">Editar</button>
+                        <button class="btn btn-danger delete-button">Excluir</button>
+                    </td>
+                </tr>
+            `;
+            knowledgeTableBody.innerHTML += row;
+        });
+    }
+
+    async function loadKnowledge() {
+        showLoader();
+        try {
+            const snapshot = await db.collection('perguntas_respostas').get();
+            allKnowledge = snapshot.docs; // Guarda os dados em cache
+            renderTable(allKnowledge); // Renderiza a tabela completa
+        } catch (error) {
+            console.error("Erro ao carregar conhecimento:", error);
+            showNotification('Falha ao carregar os dados.', 'error');
+        } finally {
+            hideLoader();
+        }
+    }
+
+    // --- Event Listeners ---
+    searchInput.addEventListener('input', (e) => {
+        const searchTerm = normalizeText(e.target.value); // Normaliza o termo de busca
+        if (!searchTerm) {
+            renderTable(allKnowledge); // Se a busca estiver vazia, mostra tudo
+            return;
+        }
+        const filteredDocs = allKnowledge.filter(doc => {
+            const question = normalizeText(doc.data().pergunta); // Normaliza a pergunta
+            const answer = normalizeText(doc.data().resposta); // Normaliza a resposta
+            return question.includes(searchTerm) || answer.includes(searchTerm);
+        });
+        renderTable(filteredDocs);
+    });
+
+    addButton.addEventListener('click', async () => {
+        const question = newQuestionInput.value.trim();
+        const answer = newAnswerInput.value.trim();
+        if (!question || !answer) {
+            return showNotification('Preencha ambos os campos.', 'error');
+        }
+        showLoader();
+        try {
+            await db.collection('perguntas_respostas').add({ pergunta: question, resposta: answer });
+            newQuestionInput.value = '';
+            newAnswerInput.value = '';
+            await loadKnowledge(); // Recarrega tudo do Firestore para ter o cache atualizado
+            showNotification('Conhecimento adicionado com sucesso!');
+        } catch (error) {
+            console.error("Erro ao adicionar documento:", error);
+            showNotification('Erro ao salvar o conhecimento.', 'error');
+        } finally {
+            hideLoader();
+        }
+    });
+    
+    knowledgeTableBody.addEventListener('click', async (e) => {
+        const target = e.target;
+        const row = target.closest('tr');
+        if (!row) return;
+        const docId = row.dataset.id;
+
+        if (target.classList.contains('delete-button')) {
+            if (confirm('Tem a certeza que quer excluir este conhecimento?')) {
+                showLoader();
+                try {
+                    await db.collection('perguntas_respostas').doc(docId).delete();
+                    await loadKnowledge();
+                    showNotification('Conhecimento excluído.');
+                } catch (error) {
+                    console.error("Erro ao excluir documento:", error);
+                    showNotification('Erro ao excluir.', 'error');
+                } finally {
+                    hideLoader();
+                }
+            }
+        }
+
+        if (target.classList.contains('edit-button')) {
+            editDocIdInput.value = docId;
+            editQuestionInput.value = row.cells[0].textContent;
+            editAnswerInput.value = row.cells[1].textContent;
+            editModal.style.display = 'block';
+        }
+    });
+
+    saveEditButton.addEventListener('click', async () => {
+        const docId = editDocIdInput.value;
+        const newQuestion = editQuestionInput.value.trim();
+        const newAnswer = editAnswerInput.value.trim();
+        if (!newQuestion || !newAnswer) {
+            return showNotification('Os campos não podem estar vazios.', 'error');
+        }
+        showLoader();
+        try {
+            await db.collection('perguntas_respostas').doc(docId).update({ pergunta: newQuestion, resposta: newAnswer });
+            editModal.style.display = 'none';
+            await loadKnowledge();
+            showNotification('Alterações salvas com sucesso!');
+        } catch (error) {
+            console.error("Erro ao atualizar documento:", error);
+            showNotification('Erro ao salvar as alterações.', 'error');
+        } finally {
+            hideLoader();
+        }
+    });
+
+    closeButton.onclick = () => { editModal.style.display = 'none'; };
+    window.onclick = (event) => { if (event.target == editModal) { editModal.style.display = "none"; } };
+
+    loginButton.addEventListener('click', () => {
+        const email = emailInput.value;
+        const password = passwordInput.value;
+        if (!email || !password) {
+            return showNotification('Por favor, digite o e-mail e a senha.', 'error');
+        }
+        showLoader();
+        auth.signInWithEmailAndPassword(email, password)
+            .catch((error) => { showNotification('E-mail ou senha incorretos.', 'error'); })
+            .finally(() => { hideLoader(); });
+    });
+
+    logoutButton.addEventListener('click', () => { auth.signOut(); });
+
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            showLoader();
+            try {
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                if (userDoc.exists && userDoc.data().role === 'admin') {
+                    loginScreen.style.display = 'none';
+                    adminPanel.style.display = 'block';
+                    await loadKnowledge();
+                } else {
+                    showNotification('Acesso negado. Permissões insuficientes.', 'error');
+                    auth.signOut();
+                }
+            } catch (error) {
+                console.error("Erro ao verificar permissão:", error);
+                showNotification('Erro ao verificar permissões.', 'error');
+                auth.signOut();
+            } finally {
+                hideLoader();
+            }
+        } else {
+            loginScreen.style.display = 'block';
+            adminPanel.style.display = 'none';
+        }
+    });
+});
+</script>
+</body>
+</html>

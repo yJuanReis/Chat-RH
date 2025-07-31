@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "chat-rh-903a1",
+    "Chatbot": "chat-rh-brmarinas",
+    "CHATBOT": "chat-rh-brmarinas"
+  },
+  "targets": {},
+  "etags": {}
+}
